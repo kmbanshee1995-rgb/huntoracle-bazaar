@@ -1,0 +1,34 @@
+name: Char Bazaar
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bazaar
+  cancel-in-progress: false
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get previous data
+        run: |
+          git fetch origin data --depth 1 && git worktree add out origin/data || mkdir -p out
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scrape tibia.com
+        run: python scrape.py out
+      - name: Publish data branch
+        run: |
+          cd out
+          rm -rf .git 2>/dev/null || true
+          git init -q -b data
+          git config user.name "bazaar-bot"
+          git config user.email "bazaar-bot@users.noreply.github.com"
+          git add -A
+          git commit -q -m "data $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data:data
